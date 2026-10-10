@@ -28,6 +28,13 @@ class MainActivity : Activity() {
         showHome()
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (::content.isInitialized) {
+            showHome()
+        }
+    }
+
     private fun base(title: String) {
         val outer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
