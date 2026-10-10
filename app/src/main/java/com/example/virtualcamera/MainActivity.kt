@@ -245,7 +245,7 @@ class MainActivity : Activity() {
             preview.addView(videoPreview, params(h = dp(200)))
             preview.addView(playbackStatus)
             preview.addView(label(
-                selectedMedia.lastPathSegment ?: "Selected video",
+                selectedMedia?.lastPathSegment ?: "Selected video",
                 12f, muted
             ).apply { gravity = Gravity.CENTER })
         }
