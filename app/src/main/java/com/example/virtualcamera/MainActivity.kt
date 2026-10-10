@@ -98,7 +98,7 @@ class MainActivity : Activity() {
     private fun showHome() {
         base("VirtualCamera")
         label("ANDROID SUPPORT TARGET\\nAndroid 14 • 15 • 16 • 17")
-        label("ROOT STATUS\\nNot checked yet")
+    label("ROOT STATUS\\n${if (RootChecker.check()) "Root Permission Granted" else "Root Permission Not Granted"}")
         label("MODULE STATUS\\nHook engine not implemented")
         label("OVERLAY STATUS\\nUse Overlay to preview controls")
         label("MIC STATUS\\nNo audio interception enabled")
