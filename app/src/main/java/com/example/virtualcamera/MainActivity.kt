@@ -137,14 +137,12 @@ class MainActivity : Activity() {
             if (uri == null) {
                 Toast.makeText(this, "Pehle video import karo", Toast.LENGTH_SHORT).show()
             } else {
-                try {
-                    startActivity(Intent(Intent.ACTION_VIEW).apply {
-                        setDataAndType(uri, "video/*")
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    })
-                } catch (_: Exception) {
-                    Toast.makeText(this, "Video preview open nahi hua", Toast.LENGTH_SHORT).show()
-                }
+                Thread {
+                    val report = com.example.virtualcamera.hooking.VideoFrameTestRunner.run(this, uri)
+                    runOnUiThread {
+                        label("VIDEO FRAME TEST\\nDuration: ${report.durationMs} ms\\nDecoded: ${report.framesDecoded}\\nFailed: ${report.failedFrames}\\nSizes: ${report.frameSizes.joinToString()}\\n${report.message}")
+                    }
+                }.start()
             }
         }
         button("Save Current Preset") {
