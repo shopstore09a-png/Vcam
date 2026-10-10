@@ -4,425 +4,609 @@ import android.app.Activity
 import android.os.Bundle
 import android.content.Intent
 import android.content.pm.ApplicationInfo
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.Gravity
 import android.view.View
 import android.widget.*
-import android.widget.LinearLayout.LayoutParams
 
 class MainActivity : Activity() {
-    private val bg = Color.rgb(7, 17, 19)
-    private val card = Color.rgb(16, 29, 31)
-    private val card2 = Color.rgb(25, 40, 42)
-    private val green = Color.rgb(73, 218, 157)
-    private val white = Color.rgb(239, 247, 246)
-    private val muted = Color.rgb(151, 172, 172)
+    private val bg = Color.rgb(7, 16, 18)
+    private val card = Color.rgb(17, 30, 32)
+    private val card2 = Color.rgb(26, 41, 43)
+    private val border = Color.rgb(41, 59, 61)
+    private val green = Color.rgb(70, 219, 155)
+    private val white = Color.rgb(240, 247, 246)
+    private val muted = Color.rgb(153, 173, 172)
+
     private val prefs by lazy { getSharedPreferences("targets", MODE_PRIVATE) }
+    private var currentPage = "Home"
     private var selectedMedia: Uri? = null
     private var mediaType = "No source"
-    private lateinit var page: LinearLayout
+    private var libraryTab = "MEDIA"
+    private var searchQuery = ""
+    private val selected = mutableSetOf<String>()
+    private lateinit var root: LinearLayout
     private lateinit var body: LinearLayout
-    private val pickVideo = 101
-    private val pickImage = 102
+
+    companion object {
+        private const val PICK_MEDIA = 101
+        private const val PICK_IMAGE = 102
+        private const val PICK_VIDEO = 103
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        selected.addAll(prefs.getStringSet("selected_packages", emptySet()) ?: emptySet())
         selectedMedia = prefs.getString("media_uri", null)?.let { Uri.parse(it) }
         mediaType = prefs.getString("media_type", "No source") ?: "No source"
         showHome()
     }
 
-    private fun shape(color: Int, radius: Float = 22f, stroke: Int = 0): GradientDrawable {
-        return GradientDrawable().apply {
+    private fun dp(n: Int) = (n * resources.displayMetrics.density).toInt()
+
+    private fun shape(color: Int, radius: Int = 22, stroke: Int = 0) =
+        GradientDrawable().apply {
             setColor(color)
-            cornerRadius = radius * resources.displayMetrics.density
-            if (stroke != 0) setStroke((1 * resources.displayMetrics.density).toInt(), stroke)
+            cornerRadius = dp(radius).toFloat()
+            if (stroke != 0) setStroke(dp(1), stroke)
+        }
+
+    private fun params(w: Int = -1, h: Int = -2, weight: Float = 0f) =
+        LinearLayout.LayoutParams(w, h, weight)
+
+    private fun label(value: String, size: Float = 15f, color: Int = white,
+                      bold: Boolean = false): TextView {
+        return TextView(this).apply {
+            text = value
+            textSize = size
+            setTextColor(color)
+            if (bold) setTypeface(null, Typeface.BOLD)
         }
     }
 
-    private fun lp(w: Int = -1, h: Int = -2, weight: Float = 0f) =
-        LayoutParams(w, h, weight)
-
-    private fun text(
-        value: String,
-        size: Float = 15f,
-        color: Int = white,
-        bold: Boolean = false
-    ) = TextView(this).apply {
-        text = value
-        textSize = size
-        setTextColor(color)
-        if (bold) setTypeface(null, Typeface.BOLD)
+    private fun gap(parent: LinearLayout, height: Int = 12) {
+        parent.addView(View(this), params(h = dp(height)))
     }
 
-    private fun gap(height: Int) {
-        body.addView(View(this), lp(h = height))
+    private fun panel(padding: Int = 14): LinearLayout =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(padding), dp(padding), dp(padding), dp(padding))
+            background = shape(card, 24, border)
+        }
+
+    private fun horizontal(): LinearLayout =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+    private fun pill(value: String, color: Int = green): TextView =
+        label(value, 12f, color, true).apply {
+            gravity = Gravity.CENTER
+            setPadding(dp(10), dp(7), dp(10), dp(7))
+            background = shape(card2, 30)
+        }
+
+    private fun button(value: String, action: () -> Unit,
+                       primary: Boolean = false): TextView =
+        label(value, 14f, if (primary) Color.rgb(5, 35, 26) else green, true).apply {
+            gravity = Gravity.CENTER
+            setPadding(dp(12), dp(15), dp(12), dp(15))
+            background = shape(
+                if (primary) green else card2, 17,
+                if (primary) green else border
+            )
+            setOnClickListener { action() }
+        }
+
+    private fun saveTargets() {
+        prefs.edit().putStringSet("selected_packages", selected.toSet()).apply()
     }
 
-    private fun startScreen(title: String, subtitle: String = "") {
-        val root = LinearLayout(this).apply {
+    private fun screen(title: String, subtitle: String = "") {
+        currentPage = title
+        root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(bg)
         }
+
         val scroll = ScrollView(this).apply {
             clipToPadding = false
-            setPadding(0, 0, 0, 10)
             isFillViewport = false
         }
-        page = LinearLayout(this).apply {
+        body = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(12), dp(18), dp(12))
+            setPadding(dp(18), dp(10), dp(18), dp(18))
         }
-        scroll.addView(page)
-        root.addView(scroll, lp(h = 0, weight = 1f))
+        scroll.addView(body)
+        root.addView(scroll, params(h = 0, weight = 1f))
 
-        body = page
-        if (title == "DRVCAM") {
-            val header = LinearLayout(this).apply {
-                gravity = Gravity.CENTER_VERTICAL
-                orientation = LinearLayout.HORIZONTAL
-                setPadding(dp(4), dp(8), dp(4), dp(20))
-            }
-            val logo = text("♧", 29f, green, true).apply {
-                gravity = Gravity.CENTER
-                background = shape(card2, 15f, green)
-            }
-            header.addView(logo, lp(dp(48), dp(48)))
-            val name = text("  DRVCAM", 29f, white, true)
-            header.addView(name, lp(0, -2, 1f))
-            header.addView(text("DR", 15f, green, true).apply {
-                gravity = Gravity.CENTER
-                background = shape(card2, 40f)
-            }, lp(dp(48), dp(48)))
-            body.addView(header)
-        } else {
-            body.addView(text(title, 27f, white, true).apply {
-                setPadding(dp(4), dp(14), dp(4), dp(5))
-            })
-            if (subtitle.isNotEmpty()) {
-                body.addView(text(subtitle, 14f, muted).apply {
-                    setPadding(dp(4), 0, dp(4), dp(18))
-                })
-            }
+        val header = horizontal().apply {
+            setPadding(dp(4), dp(8), dp(4), dp(18))
         }
-
-        val nav = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
+        header.addView(label("♧", 28f, green, true).apply {
             gravity = Gravity.CENTER
-            setPadding(dp(10), dp(8), dp(10), dp(8))
+            background = shape(card2, 14, border)
+        }, params(dp(48), dp(48)))
+        header.addView(label("  DRVCAM", 28f, white, true), params(0, -2, 1f))
+        header.addView(label("DR", 14f, green, true).apply {
+            gravity = Gravity.CENTER
+            background = shape(card2, 40)
+        }, params(dp(48), dp(48)))
+        body.addView(header)
+
+        if (title != "Home") {
+            body.addView(label(title, 28f, white, true))
+            if (subtitle.isNotEmpty()) {
+                body.addView(label(subtitle, 14f, muted).apply {
+                    setPadding(0, dp(4), 0, dp(16))
+                })
+            } else gap(body, 12)
+        }
+
+        val nav = horizontal().apply {
+            setPadding(dp(10), dp(7), dp(10), dp(7))
             setBackgroundColor(bg)
         }
-        listOf("⌂\nHome", "▧\nLibrary", "⚙\nSettings").forEachIndexed { index, label ->
-            val active = when (index) {
-                0 -> title == "DRVCAM"
+        listOf("⌂\nHome", "▧\nLibrary", "⚙\nSettings").forEachIndexed { i, value ->
+            val active = when (i) {
+                0 -> title == "Home" || title == "Target Apps"
                 1 -> title == "Library"
                 else -> title == "Settings"
             }
-            val item = text(label, 14f, if (active) green else muted, true).apply {
+            val item = label(value, 14f, if (active) white else muted, true).apply {
                 gravity = Gravity.CENTER
-                setPadding(dp(8), dp(8), dp(8), dp(8))
-                if (active) background = shape(Color.rgb(13, 47, 38), 32f)
+                setPadding(dp(12), dp(8), dp(12), dp(8))
+                if (active) background = shape(Color.rgb(13, 49, 38), 30)
                 setOnClickListener {
-                    when (index) {
+                    when (i) {
                         0 -> showHome()
                         1 -> showLibrary()
                         2 -> showSettings()
                     }
                 }
             }
-            nav.addView(item, lp(0, dp(54), 1f))
+            nav.addView(item, params(0, dp(55), 1f))
         }
         root.addView(nav)
         setContentView(root)
     }
 
-    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
-
-    private fun panel(): LinearLayout {
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), dp(14), dp(14), dp(14))
-            background = shape(card, 25f, Color.rgb(37, 55, 57))
+    override fun onBackPressed() {
+        when (currentPage) {
+            "Target Apps", "Library", "Settings" -> showHome()
+            else -> super.onBackPressed()
         }
-    }
-
-    private fun row(): LinearLayout {
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-    }
-
-    private fun pill(label: String, color: Int = green): TextView =
-        text(label, 12f, color, true).apply {
-            gravity = Gravity.CENTER
-            setPadding(dp(10), dp(7), dp(10), dp(7))
-            background = shape(card2, 25f)
-        }
-
-    private fun actionButton(
-        label: String,
-        action: () -> Unit,
-        active: Boolean = false
-    ): TextView = text(label, 14f, if (active) green else muted, true).apply {
-        gravity = Gravity.CENTER
-        setPadding(dp(8), dp(14), dp(8), dp(14))
-        background = shape(if (active) Color.rgb(14, 48, 38) else card, 17f,
-            if (active) green else Color.rgb(40, 58, 60))
-        setOnClickListener { action() }
     }
 
     private fun showHome() {
-        startScreen("DRVCAM")
-        val targets = prefs.getStringSet("selected_packages", emptySet()) ?: emptySet()
+        screen("Home")
 
         val live = panel()
-        val liveHead = row()
-        liveHead.addView(text("Live Source", 18f, white, true), lp(0, -2, 1f))
+        val liveHead = horizontal()
+        liveHead.addView(label("Live Source", 18f, white, true), params(0, -2, 1f))
         liveHead.addView(pill(mediaType))
         live.addView(liveHead)
-        gapIn(live, 12)
+        gap(live, 12)
 
         val preview = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(dp(12), dp(12), dp(12), dp(12))
-            background = shape(Color.rgb(19, 37, 39), 21f)
-            minimumHeight = dp(225)
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+            background = shape(Color.rgb(19, 37, 39), 21)
+            minimumHeight = dp(222)
         }
-        preview.addView(text("● VIRTUAL", 13f, green, true).apply {
-            gravity = Gravity.LEFT
-        }, lp(-1))
-        val previewIcon = text(
+        preview.addView(label("● VIRTUAL", 13f, green, true))
+        val previewArea = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+        }
+        previewArea.addView(label(
             if (selectedMedia == null) "▧" else "▶",
             54f, muted, true
-        ).apply { gravity = Gravity.CENTER }
-        preview.addView(previewIcon, lp(-1, 0, 1f))
-        preview.addView(text(
-            selectedMedia?.lastPathSegment ?: "No media selected",
-            12f, muted
-        ).apply { gravity = Gravity.CENTER }, lp(-1))
-        live.addView(preview, lp(h = dp(238)))
-        gapIn(live, 10)
+        ).apply { gravity = Gravity.CENTER })
+        previewArea.addView(label(
+            selectedMedia?.lastPathSegment ?: "No media selected", 12f, muted
+        ).apply { gravity = Gravity.CENTER })
+        preview.addView(previewArea, params(h = dp(160)))
+        live.addView(preview)
+        gap(live, 10)
 
-        val floating = row().apply {
+        val floating = horizontal().apply {
             setPadding(dp(12), dp(12), dp(12), dp(12))
-            background = shape(card2, 17f)
+            background = shape(card2, 17)
         }
-        floating.addView(text("▣  Floating Controller", 14f, white, true), lp(0, -2, 1f))
-        floating.addView(pill("🔒 PRO", Color.rgb(255, 207, 91)))
-        floating.addView(text("   ○", 25f, muted), lp())
+        floating.addView(label("▣  Floating Controller", 14f, white, true),
+            params(0, -2, 1f))
+        floating.addView(pill("🔒 PRO", Color.rgb(255, 206, 95)))
+        floating.addView(label("   ○", 22f, muted))
         live.addView(floating)
-        body.addView(live, lp())
-        gap(16)
+        body.addView(live)
+        gap(body, 16)
 
-        val targetCard = panel()
-        val targetHead = row()
-        targetHead.addView(text("Target App", 18f, white, true), lp(0, -2, 1f))
-        targetHead.addView(text("${targets.size} selected  ›", 14f, muted))
-        targetCard.addView(targetHead)
-        targetCard.addView(text(
-            if (targets.isEmpty()) "Choose camera-using apps"
-            else targets.joinToString(", "),
-            14f, muted
-        ).apply { setPadding(0, dp(15), 0, dp(2)) })
-        targetCard.setOnClickListener { showTargets() }
-        body.addView(targetCard)
-        gap(16)
+        // Target picker: chosen applications appear as compact chips here.
+        val target = panel()
+        val targetHead = horizontal()
+        targetHead.addView(label("Target App", 18f, white, true), params(0, -2, 1f))
+        targetHead.addView(label("${selected.size} selected  ›", 13f, muted))
+        target.addView(targetHead)
+        target.setOnClickListener { showTargets() }
 
-        val media = row().apply {
+        if (selected.isEmpty()) {
+            target.addView(label("Choose camera-using apps", 14f, muted).apply {
+                setPadding(0, dp(12), 0, dp(2))
+            })
+        } else {
+            gap(target, 10)
+            val chips = horizontal().apply { gravity = Gravity.TOP }
+            var count = 0
+            selected.toList().forEach { pkg ->
+                val app = try {
+                    packageManager.getApplicationInfo(pkg, 0)
+                } catch (_: Exception) { null }
+                val appName = if (app != null)
+                    packageManager.getApplicationLabel(app).toString() else pkg
+                val chip = label("● $appName  ×", 12f, green, true).apply {
+                    setPadding(dp(10), dp(9), dp(10), dp(9))
+                    background = shape(Color.rgb(13, 49, 38), 18)
+                    setOnClickListener {
+                        selected.remove(pkg)
+                        saveTargets()
+                        showHome()
+                    }
+                }
+                chips.addView(chip, params(h = -2))
+                chips.addView(View(this), params(dp(6), 1))
+                count++
+                if (count >= 3) return@forEach
+            }
+            target.addView(chips)
+            if (selected.size > 3) {
+                target.addView(label("+ ${selected.size - 3} more apps", 12f, muted)
+                    .apply { setPadding(0, dp(6), 0, 0) })
+            }
+        }
+        body.addView(target)
+        gap(body, 16)
+
+        val media = horizontal().apply {
             setPadding(dp(14), dp(15), dp(14), dp(15))
-            background = shape(card, 24f, Color.rgb(37, 55, 57))
+            background = shape(card, 23, border)
+            setOnClickListener { showLibrary() }
         }
-        media.addView(text("▤", 30f, muted, true).apply {
+        media.addView(label("▤", 30f, muted, true).apply {
             gravity = Gravity.CENTER
-            background = shape(card2, 15f)
-        }, lp(dp(66), dp(66)))
-        val mediaInfo = LinearLayout(this).apply {
+            background = shape(card2, 14)
+        }, params(dp(66), dp(66)))
+        val info = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(12), 0, 0, 0)
+            setPadding(dp(12), 0, dp(8), 0)
         }
-        mediaInfo.addView(text("Media Source", 17f, white, true))
-        mediaInfo.addView(text("Choose a photo or MP4", 13f, muted))
-        media.addView(mediaInfo, lp(0, -2, 1f))
-        media.addView(text("Import", 16f, green, true).apply {
-            setOnClickListener { importMedia() }
-        })
-        media.setOnClickListener { importMedia() }
+        info.addView(label("Media Source", 17f, white, true))
+        info.addView(label("Choose a photo or MP4", 13f, muted))
+        media.addView(info, params(0, -2, 1f))
+        media.addView(label("Import", 15f, green, true))
         body.addView(media)
-        gap(16)
+        gap(body, 16)
 
-        val quickHead = row()
-        quickHead.addView(text("Quick Controls", 17f, white, true), lp(0, -2, 1f))
-        quickHead.addView(text("0° · Fit · Loop", 12f, muted))
-        body.addView(quickHead)
-        gap(10)
+        val qh = horizontal()
+        qh.addView(label("Quick Controls", 17f, white, true), params(0, -2, 1f))
+        qh.addView(label("0° · Fit · Loop", 12f, muted))
+        body.addView(qh)
+        gap(body, 10)
 
-        val controls = row()
-        listOf("⟳\nRotate", "◫\nMirror", "▣\nCamera Source", "⇄\nLoop").forEachIndexed { i, label ->
-            val item = actionButton(label, {
-                Toast.makeText(this, when (i) {
-                    0 -> "Rotate control selected"
-                    1 -> "Mirror control selected"
-                    2 -> "Camera Source is not connected yet"
-                    else -> "Loop enabled for selected media"
-                }, Toast.LENGTH_SHORT).show()
-            }, i == 3)
-            val wrap = LinearLayout(this).apply {
-                setPadding(dp(3), 0, dp(3), 0)
-                addView(item, lp(-1, dp(84)))
+        val controls = horizontal()
+        listOf("⟳\nRotate", "◫\nMirror", "▣\nCamera Source", "⇄\nLoop")
+            .forEachIndexed { i, value ->
+                val cell = button(value, {
+                    when (i) {
+                        0 -> prefs.edit().putInt("rotation",
+                            (prefs.getInt("rotation", 0) + 90) % 360).apply()
+                        1 -> prefs.edit().putBoolean("mirror",
+                            !prefs.getBoolean("mirror", false)).apply()
+                        2 -> Toast.makeText(this,
+                            "Camera source configuration is not connected yet",
+                            Toast.LENGTH_SHORT).show()
+                        3 -> prefs.edit().putBoolean("loop",
+                            !prefs.getBoolean("loop", true)).apply()
+                    }
+                    if (i == 0 || i == 1 || i == 3) {
+                        Toast.makeText(this, "$value preference saved",
+                            Toast.LENGTH_SHORT).show()
+                    }
+                }, i == 3)
+                controls.addView(cell, params(0, dp(82), 1f))
+                if (i < 3) controls.addView(View(this), params(dp(5), 1))
             }
-            controls.addView(wrap, lp(0, -2, 1f))
-        }
         body.addView(controls)
-        gap(16)
+        gap(body, 16)
 
-        val mainButtons = row()
-        mainButtons.addView(actionButton("▶  Enable", {
-            Toast.makeText(this, "Hook engine is not verified active yet", Toast.LENGTH_LONG).show()
-        }), lp(0, dp(68), 1f))
-        mainButtons.addView(View(this), lp(dp(8), 1))
-        mainButtons.addView(actionButton("■  Disable", {
-            Toast.makeText(this, "No active session to disable", Toast.LENGTH_SHORT).show()
-        }), lp(0, dp(68), 1f))
-        body.addView(mainButtons)
-        gap(10)
-        body.addView(actionButton("▣   Prepare Target", {
-            showTargets()
-        }), lp(h = dp(64)))
-        gap(16)
+        val actions = horizontal()
+        actions.addView(button("▶  Enable", {
+            Toast.makeText(this,
+                "Hook engine must be verified before enabling camera replacement",
+                Toast.LENGTH_LONG).show()
+        }), params(0, dp(66), 1f))
+        actions.addView(View(this), params(dp(8), 1))
+        actions.addView(button("■  Disable", {
+            Toast.makeText(this, "No active replacement session confirmed",
+                Toast.LENGTH_SHORT).show()
+        }), params(0, dp(66), 1f))
+        body.addView(actions)
+        gap(body, 10)
+        body.addView(button("▣   Prepare Target", { showTargets() }))
+        gap(body, 14)
 
-        val status = panel()
-        val statusRow = row()
-        listOf(
-            "● Root\nCheck",
-            "● Module\nCheck",
-            "● Overlay\nOff",
-            "● Mic\nReady"
-        ).forEachIndexed { index, label ->
-            val c = when (index) {
-                2 -> muted
-                1 -> Color.rgb(238, 190, 88)
-                else -> green
+        val status = panel(12)
+        val sr = horizontal()
+        listOf("● Root\nCheck", "● Module\nCheck", "● Overlay\nOff", "● Mic\nReady")
+            .forEachIndexed { i, value ->
+                sr.addView(label(value, 11f,
+                    if (i == 2) muted else green, i == 0 || i == 1).apply {
+                    gravity = Gravity.CENTER
+                }, params(0, dp(44), 1f))
             }
-            statusRow.addView(text(label, 12f, c, false).apply {
-                gravity = Gravity.CENTER
-            }, lp(0, dp(48), 1f))
-        }
-        status.addView(statusRow)
+        status.addView(sr)
         body.addView(status)
-        gap(12)
-    }
-
-    private fun gapIn(view: LinearLayout, height: Int) {
-        view.addView(View(this), lp(h = height))
-    }
-
-    private fun importMedia() {
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            type = "*/*"
-            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("video/*", "image/*"))
-            addCategory(Intent.CATEGORY_OPENABLE)
-        }
-        startActivityForResult(intent, pickVideo)
     }
 
     private fun showTargets() {
-        startScreen("Target Apps", "Choose camera-using apps. Package names are shown below each app.")
-        val selected = (prefs.getStringSet("selected_packages", emptySet())
-            ?: emptySet()).toMutableSet()
+        screen("Target Apps", "Select one or more apps, then tap Apply.")
         val apps = packageManager.getInstalledApplications(0)
             .filter { it.packageName != packageName }
             .sortedBy { packageManager.getApplicationLabel(it).toString().lowercase() }
 
-        body.addView(text("${apps.size} installed apps", 15f, green, true))
-        gap(10)
-        apps.forEach { app: ApplicationInfo ->
-            val item = panel()
-            val cb = CheckBox(this).apply {
-                text = packageManager.getApplicationLabel(app).toString()
-                textSize = 16f
-                setTextColor(white)
-                buttonTintList = android.content.res.ColorStateList.valueOf(green)
-                isChecked = selected.contains(app.packageName)
-                setOnCheckedChangeListener { _, checked ->
-                    if (checked) selected.add(app.packageName)
-                    else selected.remove(app.packageName)
-                }
-            }
-            item.addView(cb)
-            item.addView(text(app.packageName, 12f, muted).apply {
-                setPadding(dp(34), 0, 0, 0)
-            })
-            body.addView(item)
-            gap(8)
+        val search = EditText(this).apply {
+            hint = "⌕   Search apps"
+            setHintTextColor(muted)
+            setTextColor(white)
+            textSize = 16f
+            singleLine = true
+            setPadding(dp(16), dp(14), dp(16), dp(14))
+            background = shape(card2, 16, border)
         }
-        body.addView(actionButton("Save Selected Apps (${selected.size})", {
-            prefs.edit().putStringSet("selected_packages", selected.toSet()).apply()
-            Toast.makeText(this, "Saved ${selected.size} target apps", Toast.LENGTH_SHORT).show()
+        body.addView(search)
+        gap(body, 12)
+
+        val counter = label("", 14f, muted, true)
+        body.addView(counter)
+        gap(body, 8)
+
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        body.addView(list)
+
+        fun render(query: String) {
+            list.removeAllViews()
+            val filtered = apps.filter {
+                packageManager.getApplicationLabel(it).toString()
+                    .contains(query, true) || it.packageName.contains(query, true)
+            }
+            counter.text = "${selected.size} selected  ·  ${filtered.size} apps found"
+
+            filtered.forEach { app ->
+                val pkg = app.packageName
+                val name = packageManager.getApplicationLabel(app).toString()
+                val item = horizontal().apply {
+                    setPadding(dp(10), dp(10), dp(8), dp(10))
+                    background = shape(card, 16, border)
+                }
+                val icon = try { packageManager.getApplicationIcon(app) } catch (_: Exception) { null }
+                val appIcon = ImageView(this@MainActivity).apply {
+                    if (icon != null) setImageDrawable(icon)
+                }
+                item.addView(appIcon, params(dp(42), dp(42)))
+                val texts = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(dp(10), 0, dp(4), 0)
+                }
+                texts.addView(label(name, 15f, white, true))
+                texts.addView(label(pkg, 11f, muted))
+                item.addView(texts, params(0, -2, 1f))
+                val cb = CheckBox(this).apply {
+                    buttonTintList = ColorStateList.valueOf(green)
+                    isChecked = selected.contains(pkg)
+                    setOnCheckedChangeListener { _, checked ->
+                        if (checked) selected.add(pkg) else selected.remove(pkg)
+                        saveTargets()
+                        counter.text = "${selected.size} selected  ·  ${filtered.size} apps found"
+                    }
+                }
+                item.addView(cb, params(dp(44), dp(48)))
+                list.addView(item)
+                gap(list, 6)
+            }
+        }
+
+        search.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                render(s?.toString() ?: "")
+            }
+            override fun afterTextChanged(s: Editable?) {}
+        })
+        render("")
+
+        gap(body, 12)
+        body.addView(button("✓   Apply · ${selected.size} selected", {
+            saveTargets()
             showHome()
         }, true))
+        body.addView(label("Selections save immediately and remain selected when you return.",
+            12f, muted).apply { setPadding(dp(4), dp(10), dp(4), dp(8)) })
+    }
+
+    private fun importDocument(type: String, request: Int) {
+        val i = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            this.type = type
+            addCategory(Intent.CATEGORY_OPENABLE)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+        }
+        startActivityForResult(i, request)
     }
 
     private fun showLibrary() {
-        startScreen("Library", "Import and choose your virtual camera media.")
-        val selected = panel()
-        selected.addView(text("Selected media", 18f, white, true))
-        selected.addView(text(
-            selectedMedia?.lastPathSegment ?: "No media selected",
-            14f, muted
-        ).apply { setPadding(0, dp(12), 0, dp(12)) })
-        body.addView(selected)
-        gap(12)
-        body.addView(actionButton("＋  Import Photo / MP4", { importMedia() }, true))
-        gap(10)
-        body.addView(text("Media preview and actual camera frame injection will be connected in the next stage.", 13f, muted))
+        screen("Library", "Your imported media")
+        val tabs = horizontal().apply {
+            background = shape(card, 18)
+            setPadding(dp(6), dp(6), dp(6), dp(6))
+        }
+        listOf("MEDIA", "PRESETS").forEach { tab ->
+            tabs.addView(label(tab, 15f,
+                if (libraryTab == tab) green else muted, true).apply {
+                gravity = Gravity.CENTER
+                setPadding(dp(10), dp(14), dp(10), dp(14))
+                setOnClickListener {
+                    libraryTab = tab
+                    showLibrary()
+                }
+            }, params(0, -2, 1f))
+        }
+        body.addView(tabs)
+        gap(body, 14)
+
+        if (libraryTab == "MEDIA") {
+            val importRow = horizontal()
+            importRow.addView(button("▣  Import MP4", {
+                importDocument("video/*", PICK_VIDEO)
+            }, true), params(0, dp(58), 1f))
+            importRow.addView(View(this), params(dp(8), 1))
+            importRow.addView(button("▧  Import Image", {
+                importDocument("image/*", PICK_IMAGE)
+            }, true), params(0, dp(58), 1f))
+            body.addView(importRow)
+            gap(body, 14)
+
+            val media = panel()
+            media.gravity = Gravity.CENTER
+            if (selectedMedia == null) {
+                media.addView(label("No media imported", 17f, white))
+            } else {
+                media.addView(label("✓  $mediaType", 16f, green, true))
+                media.addView(label(selectedMedia?.lastPathSegment ?: "Imported file",
+                    13f, muted).apply {
+                    gravity = Gravity.CENTER
+                    setPadding(0, dp(8), 0, dp(8))
+                })
+                media.addView(button("Remove selection", {
+                    selectedMedia = null
+                    mediaType = "No source"
+                    prefs.edit().remove("media_uri").putString("media_type", mediaType).apply()
+                    showLibrary()
+                }))
+            }
+            body.addView(media)
+        } else {
+            body.addView(panel().apply {
+                addView(label("No presets yet", 17f, white, true))
+                addView(label("Presets will store reusable rotation, mirror and loop settings.",
+                    13f, muted).apply { setPadding(0, dp(8), 0, 0) })
+            })
+        }
     }
 
     private fun showSettings() {
-        startScreen("Settings", "Virtual camera configuration")
-        val entries = listOf(
-            "App version" to "0.4.0",
-            "Framework" to "Vector / libxposed API 102",
-            "Hook status" to "Not verified active",
-            "Target scope" to "Enable VirtualCamera in Vector for each target app",
-            "Overlay" to "Floating Controller is a future feature",
-            "Privacy" to "Media access is chosen through Android's document picker"
-        )
-        entries.forEach { (title, value) ->
-            val item = panel()
-            item.addView(text(title, 15f, green, true))
-            item.addView(text(value, 14f, muted).apply {
-                setPadding(0, dp(8), 0, 0)
-            })
-            body.addView(item)
-            gap(10)
+        screen("Settings", "System & controller")
+
+        fun section(title: String): LinearLayout {
+            val box = panel(14)
+            box.addView(label(title, 14f, green, true))
+            gap(box, 8)
+            body.addView(box)
+            gap(body, 12)
+            return box
         }
+
+        fun settingRow(box: LinearLayout, title: String, desc: String,
+                       key: String, default: Boolean = false) {
+            val r = horizontal()
+            val info = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            info.addView(label(title, 16f, white))
+            info.addView(label(desc, 13f, muted).apply {
+                setPadding(0, dp(4), 0, 0)
+            })
+            r.addView(info, params(0, -2, 1f))
+            val toggle = Switch(this).apply {
+                buttonTintList = ColorStateList.valueOf(green)
+                isChecked = prefs.getBoolean(key, default)
+                setOnCheckedChangeListener { _, checked ->
+                    prefs.edit().putBoolean(key, checked).apply()
+                }
+            }
+            r.addView(toggle)
+            box.addView(r)
+            gap(box, 14)
+        }
+
+        val general = section("GENERAL")
+        settingRow(general, "Keep Alive", "Keep the app ready in background",
+            "keep_alive")
+        settingRow(general, "Start on Boot", "Restore Keep Alive after restart",
+            "start_boot")
+        settingRow(general, "Floating Controller", "Controller overlay preference",
+            "overlay_enabled")
+
+        val diagnostics = section("DIAGNOSTICS")
+        listOf(
+            "Check Environment" to "Root, module, overlay and scopes",
+            "Module Status" to "Vector / LSPosed API 102",
+            "Virtual Camera" to "Replacement engine status"
+        ).forEach { (title, desc) ->
+            diagnostics.addView(label(title, 16f, white, true))
+            diagnostics.addView(label(desc, 13f, muted).apply {
+                setPadding(0, dp(4), 0, dp(5))
+            })
+            diagnostics.addView(label(
+                if (title == "Module Status") "Not verified by this screen"
+                else "Needs device/framework verification",
+                12f, muted
+            ))
+            gap(diagnostics, 10)
+        }
+
+        val prefsSection = section("PREFERENCES")
+        prefsSection.addView(label("Language", 16f, white))
+        prefsSection.addView(label("System default", 14f, muted).apply {
+            setPadding(0, dp(6), 0, dp(12))
+        })
+        prefsSection.addView(button("Disable all selected targets", {
+            selected.clear()
+            saveTargets()
+            Toast.makeText(this, "Target selection cleared", Toast.LENGTH_SHORT).show()
+            showSettings()
+        }))
+        gap(prefsSection, 10)
+        prefsSection.addView(label("About DRVCAM", 16f, white, true))
+        prefsSection.addView(label("UI controls and media selection are available. Actual camera frame replacement is not yet verified.",
+            13f, muted).apply { setPadding(0, dp(6), 0, 0) })
     }
 
     @Deprecated("Deprecated in Android API")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (resultCode != RESULT_OK || data?.data == null) return
-        selectedMedia = data.data!!
-        val type = contentResolver.getType(selectedMedia!!)
-        mediaType = if (type?.startsWith("image/") == true) "Image selected" else "Video selected"
+        if (resultCode != RESULT_OK) return
+        val uri = data?.data ?: return
         try {
             contentResolver.takePersistableUriPermission(
-                selectedMedia!!,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION
+                uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
             )
         } catch (_: Exception) { }
+
+        selectedMedia = uri
+        mediaType = if (requestCode == PICK_IMAGE) "Image selected" else "Video selected"
         prefs.edit()
-            .putString("media_uri", selectedMedia.toString())
+            .putString("media_uri", uri.toString())
             .putString("media_type", mediaType)
             .apply()
         Toast.makeText(this, "$mediaType", Toast.LENGTH_SHORT).show()
         when (requestCode) {
-            pickVideo, pickImage -> showHome()
+            PICK_VIDEO, PICK_IMAGE, PICK_MEDIA -> showLibrary()
         }
     }
 }
