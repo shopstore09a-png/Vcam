@@ -14,3 +14,5 @@ dependencyResolutionManagement {
 }
 rootProject.name = "VirtualCamera"
 include(":app")
+
+include(":cameratest")
