@@ -203,18 +203,52 @@ class MainActivity : Activity() {
             minimumHeight = dp(222)
         }
         preview.addView(label("● VIRTUAL", 13f, green, true))
-        val previewArea = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
+        if (selectedMedia == null) {
+            val emptyPreview = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+            }
+            emptyPreview.addView(label("▧", 54f, muted, true).apply {
+                gravity = Gravity.CENTER
+            })
+            emptyPreview.addView(label("No media selected", 12f, muted).apply {
+                gravity = Gravity.CENTER
+            })
+            preview.addView(emptyPreview, params(h = dp(160)))
+        } else if (mediaType == "Image selected") {
+            val imagePreview = ImageView(this).apply {
+                setImageURI(selectedMedia)
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                contentDescription = "Selected image preview"
+            }
+            preview.addView(imagePreview, params(h = dp(200)))
+        } else {
+            val playbackStatus = label("Loading video…", 12f, muted)
+            playbackStatus.gravity = Gravity.CENTER
+            val videoPreview = VideoView(this).apply {
+                setVideoURI(selectedMedia)
+                setOnPreparedListener { player ->
+                    player.isLooping = prefs.getBoolean("loop", true)
+                    playbackStatus.text = "Video ready · ${player.duration / 1000}s"
+                    start()
+                }
+                setOnCompletionListener {
+                    playbackStatus.text = "Playback completed"
+                }
+                setOnErrorListener { _, what, extra ->
+                    playbackStatus.text = "Playback error: $what / $extra"
+                    Toast.makeText(this@MainActivity,
+                        playbackStatus.text, Toast.LENGTH_LONG).show()
+                    true
+                }
+            }
+            preview.addView(videoPreview, params(h = dp(200)))
+            preview.addView(playbackStatus)
+            preview.addView(label(
+                selectedMedia.lastPathSegment ?: "Selected video",
+                12f, muted
+            ).apply { gravity = Gravity.CENTER })
         }
-        previewArea.addView(label(
-            if (selectedMedia == null) "▧" else "▶",
-            54f, muted, true
-        ).apply { gravity = Gravity.CENTER })
-        previewArea.addView(label(
-            selectedMedia?.lastPathSegment ?: "No media selected", 12f, muted
-        ).apply { gravity = Gravity.CENTER })
-        preview.addView(previewArea, params(h = dp(160)))
         live.addView(preview)
         gap(live, 10)
 
