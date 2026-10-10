@@ -24,3 +24,8 @@ android {
         versionName = "0.1.0"
     }
 }
+
+
+dependencies {
+    compileOnly("io.github.libxposed:api:102.0.0")
+}
