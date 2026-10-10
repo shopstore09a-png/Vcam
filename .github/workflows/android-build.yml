@@ -39,11 +39,10 @@ jobs:
           path: camswap-src
           submodules: recursive
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Install CamSwap SDK and native tools
-        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;25.1.8937393" "cmake;3.22.1"
+        run: |
+          yes | sdkmanager --licenses
+          sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;25.1.8937393" "cmake;3.22.1"
 
       - name: Assemble CamSwap APK
         working-directory: camswap-src
