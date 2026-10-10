@@ -180,7 +180,6 @@ class MainActivity : Activity() {
             val uri = data.data!!
             if (requestCode == pickVideo) {
                 selectedVideo = uri
-                contentDescription = uri.toString()
                 Toast.makeText(this, "Video selected", Toast.LENGTH_SHORT).show()
                 showLibrary()
             } else if (requestCode == pickImage) {
