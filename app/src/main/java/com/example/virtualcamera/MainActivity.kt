@@ -14,6 +14,7 @@ import android.text.TextWatcher
 import android.view.Gravity
 import android.view.View
 import android.widget.*
+import com.example.virtualcamera.hooking.VideoFrameTestRunner
 
 class MainActivity : Activity() {
     private val bg = Color.rgb(7, 16, 18)
@@ -603,6 +604,33 @@ class MainActivity : Activity() {
             ))
             gap(diagnostics, 10)
         }
+
+        val pipeline = section("VIDEO PIPELINE TEST")
+        pipeline.addView(label(
+            "Decode sampled frames from your selected video and report frame sizes.",
+            13f, muted
+        ).apply { setPadding(0, 0, 0, dp(10)) })
+        pipeline.addView(button("▶  Test Video Pipeline", {
+            val uri = selectedMedia
+            if (uri == null || mediaType != "Video selected") {
+                Toast.makeText(this, "Library se pehle MP4 select karo",
+                    Toast.LENGTH_LONG).show()
+            } else {
+                val report = VideoFrameTestRunner.run(this, uri)
+                val details = buildString {
+                    appendLine(report.message)
+                    appendLine("Duration: ${report.durationMs} ms")
+                    appendLine("Frames decoded: ${report.framesDecoded}")
+                    appendLine("Failed frames: ${report.failedFrames}")
+                    append("Frame sizes: ${report.frameSizes.joinToString()}")
+                }
+                android.app.AlertDialog.Builder(this)
+                    .setTitle("Video Pipeline Report")
+                    .setMessage(details)
+                    .setPositiveButton("OK", null)
+                    .show()
+            }
+        }, true))
 
         val prefsSection = section("PREFERENCES")
         prefsSection.addView(label("Language", 16f, white))
