@@ -26,6 +26,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         showHome()
+        com.example.virtualcamera.hooking.CameraCapabilityRuntimeTest.run(this)
     }
 
     override fun onResume() {
