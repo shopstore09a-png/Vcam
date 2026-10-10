@@ -367,7 +367,7 @@ class MainActivity : Activity() {
             setHintTextColor(muted)
             setTextColor(white)
             textSize = 16f
-            singleLine = true
+            isSingleLine = true
             setPadding(dp(16), dp(14), dp(16), dp(14))
             background = shape(card2, 16, border)
         }
